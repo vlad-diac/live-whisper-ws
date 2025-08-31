@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <body>
+    <h3>WS Whisper test</h3>
+    <button id="start">Start</button>
+    <pre id="out"></pre>
+    <script>
+      let ws, rec, out = document.getElementById('out');
+      const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoidGVzdF91c2VyIiwiaWF0IjoxMjM0NTY3ODkwfQ.Zloan9cSWE-u8CzARGez1llaa6l7ywwfs5-EOenOXMc'; // Valid JWT token
+
+      document.getElementById('start').onclick = async () => {
+        ws = new WebSocket(`ws://localhost:8000/ws?token=${token}`);
+        ws.onmessage = (e) => { out.textContent = e.data; };
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // 48k Opus by default; re-encode to PCM16 in worker? For demo, use MediaRecorder + raw chunks
+        const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+        // For a quick demo: let the server accept Opus too if you wish.
+        // Otherwise, use an AudioWorklet or WebAudio to downsample to PCM16 16k.
+        // For now, send the raw bytes (server assumes PCM16; adapt server to decode opus if needed).
+        mr.ondataavailable = async (ev) => {
+          if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+            const buf = await ev.data.arrayBuffer();
+            ws.send(buf);
+          }
+        };
+        mr.start(500); // 500ms chunks
+      };
+    </script>
+  </body>
+</html>
