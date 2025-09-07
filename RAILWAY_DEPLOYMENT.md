@@ -1,117 +1,183 @@
 # Railway Deployment Guide
 
-This guide explains how to deploy the Whisper WebSocket Server to Railway.
+This guide walks you through deploying your FastAPI Whisper WebSocket server on Railway with PostgreSQL database integration.
 
 ## Prerequisites
 
-- Railway account ([railway.app](https://railway.app))
-- Railway CLI installed (optional but recommended)
+1. **Railway Account**: Sign up at [railway.app](https://railway.app)
+2. **GitHub Repository**: Your code should be in a GitHub repository
+3. **Railway CLI** (optional): Install with `npm install -g @railway/cli`
 
-## Deployment Steps
+## Step 1: Set Up Railway Project
 
-### 1. Connect Repository to Railway
-
-1. Go to [Railway Dashboard](https://railway.app/dashboard)
+### 1.1 Create New Project
+1. Log into your Railway dashboard
 2. Click "New Project"
-3. Select "Deploy from GitHub repo"
-4. Connect your GitHub repository containing this code
+3. Choose "Deploy from GitHub repo" 
+4. Connect and select your repository
 
-### 2. Environment Variables
+### 1.2 Add PostgreSQL Database
+1. In your Railway project dashboard, click "Add Service"
+2. Select "Database" → "PostgreSQL"
+3. Railway will automatically create a PostgreSQL instance and provide the `DATABASE_URL` environment variable
 
-Set the following environment variables in Railway:
+## Step 2: Configure Environment Variables
 
-**Required:**
-- `SECRET_KEY`: JWT secret for authentication (generate a secure random string)
+In your Railway project settings, add these environment variables:
 
-**Optional (with defaults):**
-- `MODEL_NAME`: Whisper model to use (default: "small.en")
-  - Options: "tiny", "tiny.en", "base", "base.en", "small", "small.en", "medium", "medium.en", "large-v1", "large-v2", "large-v3"
-- `WHISPER_LANG`: Target language for transcription (default: "en")
-- `COMPUTE_TYPE`: Computation type (default: "int8")
-  - Options: "int8", "int16", "float16", "float32"
-- `CHUNK_WINDOW_SEC`: Rolling window size in seconds (default: "10.0")
-- `CHUNK_OVERLAP_SEC`: Overlap between chunks in seconds (default: "2.0")
-- `SAMPLE_RATE`: Audio sample rate (default: "16000")
-
-### 3. Build Configuration
-
-The project uses a multi-stage Docker build that:
-1. Installs system dependencies (ffmpeg, Node.js)
-2. Builds the React frontend
-3. Sets up the Python backend
-4. Serves both frontend and backend from a single container
-
-Railway will automatically detect the `Dockerfile` and `railway.json` configuration.
-
-### 4. Health Check
-
-The deployment includes a health check endpoint at `/health` that Railway can use to verify the service is running.
-
-## API Endpoints
-
-Once deployed, your Railway app will expose:
-
-- `GET /`: Serves the React frontend UI
-- `GET /health`: Health check endpoint
-- `GET /static/*`: Static assets for the frontend
-- `WebSocket /ws`: Original WebSocket endpoint for audio streaming
-- `WebSocket /ws-pcm16`: PCM16 audio WebSocket endpoint
-- `POST /transcribe`: HTTP file upload for transcription
-
-## Authentication
-
-The WebSocket endpoints require a JWT token passed as a query parameter:
-```
-wss://your-app.railway.app/ws?token=YOUR_JWT_TOKEN
-```
-
-Generate a JWT token using the `SECRET_KEY` you set in environment variables.
-
-## Frontend Configuration
-
-The React frontend will need to be configured to connect to your Railway deployment URL. Update the WebSocket connection URLs in your frontend code to point to:
-```
-wss://your-railway-app.railway.app/ws-pcm16?token=YOUR_TOKEN
-```
-
-## Resource Requirements
-
-- **Memory**: At least 2GB RAM recommended for the Whisper models
-- **CPU**: Multi-core recommended for better transcription performance
-- **Storage**: Minimal storage requirements as models are downloaded at startup
-
-## Model Performance
-
-Different Whisper models have different resource requirements:
-- `tiny`: Fastest, least accurate, ~1GB RAM
-- `base`: Good balance, ~1.5GB RAM
-- `small`: Recommended default, ~2GB RAM
-- `medium`: Better accuracy, ~4GB RAM
-- `large`: Best accuracy, ~8GB RAM
-
-Choose based on your Railway plan limits and accuracy requirements.
-
-## Troubleshooting
-
-1. **Build fails**: Check that all dependencies in `requirements.txt` are compatible
-2. **Model loading slow**: This is normal on first startup as the model downloads
-3. **Memory errors**: Try a smaller model (e.g., "tiny.en" or "base.en")
-4. **WebSocket connection fails**: Verify the JWT token and SECRET_KEY configuration
-
-## Local Testing
-
-To test locally before deployment:
-
+### Required Variables
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export SECRET_KEY="your-secret-key"
-export MODEL_NAME="small.en"
-
-# Run the server
-python server.py
+SECRET_KEY=your-secure-secret-key-here
+WHISPER_LANG=en
+MODEL_NAME=small.en
+COMPUTE_TYPE=int8
+RAILWAY_ENVIRONMENT=production
 ```
 
-The server will be available at `http://localhost:8000`.
+### Optional Variables (with defaults)
+```bash
+CHUNK_WINDOW_SEC=10.0
+CHUNK_OVERLAP_SEC=2.0
+SAMPLE_RATE=16000
+FRONTEND_URL=https://your-frontend-domain.com
+```
+
+### Automatic Variables (provided by Railway)
+- `DATABASE_URL`: Automatically set by PostgreSQL service
+- `PORT`: Automatically set by Railway
+- `RAILWAY_ENVIRONMENT`: Set automatically
+
+## Step 3: Deploy Your Application
+
+### 3.1 Automatic Deployment
+1. Railway will automatically detect your `Procfile` and `requirements.txt`
+2. The build process will install dependencies and start your server
+3. Monitor the deployment logs in the Railway dashboard
+
+### 3.2 Deployment Files Explained
+
+**Procfile**: Tells Railway how to run your app
+```
+web: uvicorn server:app --host 0.0.0.0 --port $PORT
+```
+
+**railway.toml**: Railway-specific configuration
+```toml
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+```
+
+## Step 4: Verify Deployment
+
+### 4.1 Health Check
+Visit your Railway-provided URL + `/health` to verify:
+- Application is running
+- Database connection is working
+- Model is loaded
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "model": "small.en",
+  "database": "connected",
+  "environment": "production"
+}
+```
+
+### 4.2 WebSocket Endpoints
+Your WebSocket endpoints will be available at:
+- `wss://your-app.railway.app/ws` - For Opus/WebM audio
+- `wss://your-app.railway.app/ws-pcm16` - For raw PCM16 audio
+
+## Step 5: Frontend Integration
+
+### 5.1 Separate Frontend Deployment
+Since you moved your React app to a separate repository:
+
+1. **Deploy Frontend**: Use Vercel, Netlify, or another platform
+2. **Update CORS**: Set `FRONTEND_URL` environment variable in Railway
+3. **WebSocket Connection**: Update your React app to connect to Railway's WebSocket URL
+
+### 5.2 Frontend Code Updates
+Update your React app's WebSocket connection:
+
+```typescript
+// Replace localhost with your Railway domain
+const wsUrl = 'wss://your-app.railway.app/ws-pcm16?token=' + yourToken;
+const websocket = new WebSocket(wsUrl);
+```
+
+## Step 6: Database Operations
+
+### 6.1 View Database Data
+Use Railway's database management interface or connect with a PostgreSQL client:
+- Host: Provided in `DATABASE_URL`
+- Use the connection string from Railway environment variables
+
+### 6.2 Database Schema
+The application automatically creates these tables:
+- `transcription_sessions`: User session tracking
+- `transcription_results`: Transcription history with timestamps
+
+## Step 7: Monitoring and Troubleshooting
+
+### 7.1 Logs
+- View application logs in Railway dashboard
+- Monitor for startup errors, database connection issues
+
+### 7.2 Common Issues
+
+**Database Connection Errors**:
+- Verify `DATABASE_URL` is set correctly
+- Check PostgreSQL service is running
+
+**Model Loading Issues**:
+- Monitor memory usage (Whisper models require significant RAM)
+- Consider using smaller models like `tiny.en` for lower memory usage
+
+**WebSocket Connection Issues**:
+- Verify JWT token is valid
+- Check CORS settings match your frontend domain
+
+## Step 8: Production Optimizations
+
+### 8.1 Security
+- Use strong `SECRET_KEY`
+- Restrict CORS origins to your frontend domain
+- Implement rate limiting if needed
+
+### 8.2 Performance
+- Monitor Railway metrics
+- Consider upgrading to higher memory plans for larger models
+- Use CDN for frontend assets
+
+### 8.3 Scaling
+- Railway automatically handles scaling
+- Monitor usage and upgrade plan as needed
+- Consider implementing connection pooling for database
+
+## Environment Variables Summary
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | ✅ | Auto | PostgreSQL connection string |
+| `SECRET_KEY` | ✅ | - | JWT secret key |
+| `PORT` | ✅ | Auto | Server port (set by Railway) |
+| `WHISPER_LANG` | ❌ | en | Whisper language code |
+| `MODEL_NAME` | ❌ | small.en | Whisper model size |
+| `COMPUTE_TYPE` | ❌ | int8 | Computation precision |
+| `FRONTEND_URL` | ❌ | * | Frontend domain for CORS |
+| `RAILWAY_ENVIRONMENT` | ❌ | Auto | Environment identifier |
+
+## Support
+
+- **Railway Docs**: [docs.railway.app](https://docs.railway.app)
+- **FastAPI Docs**: [fastapi.tiangolo.com](https://fastapi.tiangolo.com)
+- **Whisper Docs**: [github.com/openai/whisper](https://github.com/openai/whisper)

@@ -1,75 +1,99 @@
 # Railway Deployment Checklist
 
-Use this checklist to ensure a successful deployment to Railway.
+## Pre-Deployment Checklist ✅
 
-## Pre-Deployment
+- [x] **Procfile** created with correct uvicorn command
+- [x] **railway.toml** configured with health check and Python version
+- [x] **requirements.txt** updated with PostgreSQL dependencies
+- [x] **database.py** created with SQLAlchemy models and Railway integration
+- [x] **server.py** updated with database integration and improved CORS
+- [x] **.env.example** created with all required environment variables
+- [x] **RAILWAY_DEPLOYMENT.md** comprehensive guide created
 
-- [ ] Repository is pushed to GitHub/GitLab
-- [ ] All files are committed:
-  - [ ] `Dockerfile`
-  - [ ] `railway.json`
-  - [ ] `.dockerignore`
-  - [ ] `requirements.txt`
-  - [ ] Updated `server.py`
-  - [ ] `start.py`
-  - [ ] `.env.example`
+## Railway Setup Checklist
 
-## Railway Setup
+### 1. Railway Project Setup
+- [ ] Create new Railway project
+- [ ] Connect GitHub repository
+- [ ] Add PostgreSQL database service
 
-- [ ] Railway account created
-- [ ] New project created in Railway
-- [ ] Repository connected to Railway project
+### 2. Environment Variables
+- [ ] Set `SECRET_KEY` (generate a secure key)
+- [ ] Set `WHISPER_LANG=en`
+- [ ] Set `MODEL_NAME=small.en`
+- [ ] Set `COMPUTE_TYPE=int8`
+- [ ] Set `RAILWAY_ENVIRONMENT=production`
+- [ ] Set `FRONTEND_URL` (if deploying frontend separately)
 
-## Environment Variables
+### 3. Deployment Verification
+- [ ] Check deployment logs for errors
+- [ ] Verify `/health` endpoint returns "healthy" status
+- [ ] Confirm database connection shows "connected"
+- [ ] Test WebSocket endpoints with valid JWT token
 
-Set these in Railway Dashboard > Project > Variables:
+### 4. Frontend Integration (if separate)
+- [ ] Deploy React frontend to Vercel/Netlify
+- [ ] Update WebSocket URLs to point to Railway domain
+- [ ] Update CORS settings with frontend domain
+- [ ] Test end-to-end functionality
 
-- [ ] `SECRET_KEY` - Generate a secure random string (required)
-- [ ] `MODEL_NAME` - Choose Whisper model (optional, default: "small.en")
-- [ ] `WHISPER_LANG` - Target language (optional, default: "en")
-- [ ] `COMPUTE_TYPE` - Computation type (optional, default: "int8")
+## Production Optimizations
 
-## Post-Deployment
+### Security
+- [ ] Generate strong SECRET_KEY (32+ characters)
+- [ ] Restrict CORS origins to frontend domain only
+- [ ] Implement rate limiting if needed
+- [ ] Use HTTPS for all connections
 
-- [ ] Build completes successfully
-- [ ] Health check passes at `/health`
-- [ ] Frontend loads at root URL
-- [ ] WebSocket endpoints are accessible
-- [ ] Test authentication with JWT token
+### Performance
+- [ ] Monitor Railway metrics dashboard
+- [ ] Consider upgrading memory for larger Whisper models
+- [ ] Implement connection pooling if high traffic
+- [ ] Set up monitoring/alerting
 
-## Frontend Configuration
+### Maintenance
+- [ ] Set up database backups
+- [ ] Monitor application logs
+- [ ] Plan for scaling based on usage
+- [ ] Document API endpoints for frontend team
 
-- [ ] Update frontend WebSocket URLs to point to Railway deployment
-- [ ] Test WebSocket connections from frontend
-- [ ] Verify JWT token generation and validation
+## Quick Commands
 
-## Testing
+### Generate SECRET_KEY
+```python
+import secrets
+print(secrets.token_urlsafe(32))
+```
 
-- [ ] Health endpoint: `GET https://your-app.railway.app/health`
-- [ ] Frontend: `GET https://your-app.railway.app/`
-- [ ] WebSocket: `wss://your-app.railway.app/ws-pcm16?token=YOUR_TOKEN`
-- [ ] File upload: `POST https://your-app.railway.app/transcribe`
+### Test Health Endpoint
+```bash
+curl https://your-app.railway.app/health
+```
+
+### Test WebSocket (with valid token)
+```javascript
+const ws = new WebSocket('wss://your-app.railway.app/ws-pcm16?token=YOUR_JWT_TOKEN');
+```
 
 ## Troubleshooting
 
-If deployment fails:
+### Common Issues
+- **Database connection failed**: Check DATABASE_URL format and PostgreSQL service status
+- **Model loading timeout**: Increase memory allocation or use smaller model
+- **WebSocket authentication failed**: Verify JWT token is valid and SECRET_KEY matches
+- **CORS errors**: Update FRONTEND_URL environment variable
 
-1. Check Railway build logs
-2. Verify all dependencies in `requirements.txt`
-3. Ensure Docker build completes locally
-4. Check environment variables are set correctly
-5. Monitor memory usage (upgrade plan if needed)
+### Useful Railway Commands
+```bash
+# Login to Railway CLI
+railway login
 
-## Performance Optimization
+# Link to project
+railway link
 
-- [ ] Choose appropriate Whisper model for your Railway plan
-- [ ] Monitor memory and CPU usage
-- [ ] Consider upgrading Railway plan for better performance
-- [ ] Test with expected load
+# View logs
+railway logs
 
-## Security
-
-- [ ] Use strong `SECRET_KEY`
-- [ ] Consider restricting CORS origins in production
-- [ ] Implement proper JWT token validation in frontend
-- [ ] Monitor usage and implement rate limiting if needed
+# Open project in browser
+railway open
+```

@@ -1,11 +1,13 @@
-import asyncio, io, time, collections, os
+import asyncio, io, time, collections, os, uuid
 import av, numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from jose import jwt, JWTError
 from faster_whisper import WhisperModel
+from sqlalchemy.orm import Session
+from database import get_db, create_tables, TranscriptionSession, TranscriptionResult
 
 # ---- Config ----
 SECRET = os.getenv("SECRET_KEY", "1ZCsvqyHdDd7mK8wr5pkTmLYvvB5DtKm")
@@ -19,14 +21,28 @@ SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))           # we'll decode to
 PORT = int(os.getenv("PORT", "8000"))
 HOST = os.getenv("HOST", "0.0.0.0")
 
-app = FastAPI()
+app = FastAPI(title="Whisper WebSocket Server", version="1.0.0")
+
+# Update CORS for production
+FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
+if FRONTEND_URL == "*":
+    allowed_origins = ["*"]
+else:
+    allowed_origins = [FRONTEND_URL, "https://*.railway.app", "http://localhost:3000", "http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten in prod
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize database tables
+@app.on_event("startup")
+async def startup_event():
+    create_tables()
+    print("Database tables created/verified")
 
 # Mount static files for the frontend
 if os.path.exists("static"):
@@ -42,8 +58,20 @@ async def read_root():
 
 # Health check endpoint for Railway
 @app.get("/health")
-async def health_check():
-    return {"status": "healthy", "model": MODEL_NAME}
+async def health_check(db: Session = Depends(get_db)):
+    try:
+        # Test database connection
+        db.execute("SELECT 1")
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return {
+        "status": "healthy", 
+        "model": MODEL_NAME, 
+        "database": db_status,
+        "environment": os.getenv("RAILWAY_ENVIRONMENT", "local")
+    }
 
 print("Loading model...")
 model = WhisperModel(MODEL_NAME, device="cpu", compute_type=COMPUTE_TYPE)
@@ -220,7 +248,7 @@ class PCMRingBuffer:
         return out.tobytes()
 
 @app.websocket("/ws")
-async def ws_transcribe(ws: WebSocket):
+async def ws_transcribe(ws: WebSocket, db: Session = Depends(get_db)):
     token = ws.query_params.get("token")
     if not token:
         await ws.close(code=4401)
@@ -228,6 +256,14 @@ async def ws_transcribe(ws: WebSocket):
     verify(token)
 
     await ws.accept()
+    
+    # Create session in database
+    session_id = str(uuid.uuid4())
+    session = TranscriptionSession(session_id=session_id, user_token=token)
+    db.add(session)
+    db.commit()
+    print(f"Created transcription session: {session_id}")
+    
     ring = RingBuffer(CHUNK_WINDOW_SEC + CHUNK_OVERLAP_SEC, SAMPLE_RATE)
 
     # A simple loop: receive PCM16 chunks, periodically transcribe the window and send partial text
@@ -252,7 +288,16 @@ async def ws_transcribe(ws: WebSocket):
                 window = ring.get_window(CHUNK_WINDOW_SEC, CHUNK_OVERLAP_SEC)
                 if window and len(window) > 0:
                     text = await transcribe_window(window)
-                    await ws.send_text(text)
+                    if text.strip():
+                        # Log transcription result to database
+                        result = TranscriptionResult(
+                            session_id=session_id,
+                            text=text,
+                            audio_duration=len(window) // (SAMPLE_RATE * 2) * 1000  # milliseconds
+                        )
+                        db.add(result)
+                        db.commit()
+                        await ws.send_text(text)
                 last_emit = now
     except WebSocketDisconnect:
         pass
