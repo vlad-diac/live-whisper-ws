@@ -50,27 +50,27 @@ FRONTEND_URL=https://your-frontend-domain.com
 ## Step 3: Deploy Your Application
 
 ### 3.1 Automatic Deployment
-1. Railway will automatically detect your `Procfile` and `requirements.txt`
-2. The build process will install dependencies and start your server
+1. Railway will automatically detect your `railway.json` and `requirements.txt`
+2. The build process will install dependencies and start your server using the startCommand
 3. Monitor the deployment logs in the Railway dashboard
 
 ### 3.2 Deployment Files Explained
 
-**Procfile**: Tells Railway how to run your app
-```
-web: uvicorn server:app --host 0.0.0.0 --port $PORT
-```
-
-**railway.toml**: Railway-specific configuration
-```toml
-[build]
-builder = "NIXPACKS"
-
-[deploy]
-healthcheckPath = "/health"
-healthcheckTimeout = 300
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
+**railway.json**: Railway-specific configuration with start command
+```json
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "hypercorn server:app --bind \"[::]:$PORT\"",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
 ```
 
 ## Step 4: Verify Deployment

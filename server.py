@@ -439,5 +439,6 @@ async def transcribe_file(file: UploadFile = File(...)):
                 pass
 
 if __name__ == "__main__":
+    # For local development - Railway uses hypercorn via Procfile
     import uvicorn
     uvicorn.run(app, host=HOST, port=PORT)

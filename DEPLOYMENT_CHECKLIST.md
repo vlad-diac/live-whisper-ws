@@ -2,8 +2,7 @@
 
 ## Pre-Deployment Checklist ✅
 
-- [x] **Procfile** created with correct uvicorn command
-- [x] **railway.toml** configured with health check and Python version
+- [x] **railway.json** configured with start command, health check and deployment settings
 - [x] **requirements.txt** updated with PostgreSQL dependencies
 - [x] **database.py** created with SQLAlchemy models and Railway integration
 - [x] **server.py** updated with database integration and improved CORS
